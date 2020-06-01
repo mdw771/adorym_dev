@@ -8,6 +8,7 @@ import gc
 import warnings
 import pickle
 try:
+    raise Exception
     from mpi4py import MPI
 except:
     from adorym.pseudo import MPI

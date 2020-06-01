@@ -10,6 +10,7 @@ from scipy.ndimage import rotate as sp_rotate
 import time
 import re
 try:
+    raise Exception
     from mpi4py import MPI
 except:
     from adorym.pseudo import MPI
