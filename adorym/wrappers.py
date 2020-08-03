@@ -665,6 +665,14 @@ def tile(var, cp, override_backend=None):
         return var.repeat(*cp)
 
 
+def repeat(var, cp, axis=0, override_backend=None):
+    bn = override_backend if override_backend is not None else global_settings.backend
+    if bn == 'autograd':
+        return anp.repeat(var, cp, axis=axis)
+    elif bn == 'pytorch':
+        return var.repeat_interleave(*cp, dim=axis)
+
+
 def pad(var, pad_len, mode='constant', constant_values=0, override_backend=None):
     """
     :param pad_len: A tuple of tuples. Consistent with the format of numpy.pad.

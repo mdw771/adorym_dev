@@ -228,7 +228,7 @@ class PtychographyModel(ForwardModel):
 
         if optimize_probe_pos_offset:
             this_offset = probe_pos_offset[this_i_theta]
-            probe_real, probe_imag = realign_image_fourier(probe_real, probe_imag, this_offset, axes=(1, 2), device=device_obj)
+            probe_real_shifted, probe_imag_shifted = realign_image_fourier(probe_real, probe_imag, this_offset, axes=(1, 2), device=device_obj)
 
         if not two_d_mode and not self.distribution_mode:
             if not optimize_tilt:
@@ -276,8 +276,12 @@ class PtychographyModel(ForwardModel):
                 probe_imag_ls = w.stack(probe_imag_ls)
             else:
                 # Shape of probe_xxx_ls.shape is [n_probe_modes, y, x].
-                probe_real_ls = probe_real
-                probe_imag_ls = probe_imag
+                if optimize_probe_pos_offset:
+                    probe_real_ls = probe_real_shifted
+                    probe_imag_ls = probe_imag_shifted
+                else:
+                    probe_real_ls = probe_real
+                    probe_imag_ls = probe_imag
 
             # Get object list.
             if self.distribution_mode is None:
@@ -321,27 +325,27 @@ class PtychographyModel(ForwardModel):
                                 pure_projection_return_sqrt=flag_pp_sqrt)
                 ex_mag_ls.append(w.norm(ex_real, ex_imag))
             else:
-                for i_mode in range(n_probe_modes):
-                    if len(probe_real_ls.shape) == 3:
-                        this_probe_real_ls = probe_real_ls[i_mode, :, :]
-                        this_probe_imag_ls = probe_imag_ls[i_mode, :, :]
-                    else:
-                        this_probe_real_ls = probe_real_ls[:, i_mode, :, :]
-                        this_probe_imag_ls = probe_imag_ls[:, i_mode, :, :]
-                    temp_real, temp_imag = multislice_propagate_batch(
-                                subobj_ls,
-                                this_probe_real_ls, this_probe_imag_ls,
-                                energy_ev, psize_cm * ds_level, kernel=h, free_prop_cm=free_prop_cm,
-                                obj_batch_shape=[len(pos_batch), *probe_size, this_obj_size[-1]],
-                                fresnel_approx=fresnel_approx, pure_projection=pure_projection, device=device_obj,
-                                type=unknown_type, normalize_fft=self.normalize_fft, sign_convention=self.sign_convention,
-                                scale_ri_by_k=self.scale_ri_by_k, is_minus_logged=self.is_minus_logged,
-                                pure_projection_return_sqrt=flag_pp_sqrt)
-                    if i_mode == 0:
-                        ex_int = temp_real ** 2 + temp_imag ** 2
-                    else:
-                        ex_int = ex_int + temp_real ** 2 + temp_imag ** 2
-                ex_mag_ls.append(w.sqrt(ex_int))
+                if len(probe_real_ls.shape) == 3:
+                    this_probe_real_ls = w.reshape(probe_real_ls, [1, *list(probe_real_ls.shape)])
+                    this_probe_imag_ls = w.reshape(probe_imag_ls, [1, *list(probe_imag_ls.shape)])
+                    this_probe_real_ls = w.repeat(this_probe_real_ls, minibatch_size, 0)
+                    this_probe_imag_ls = w.repeat(this_probe_imag_ls, minibatch_size, 0)
+                else:
+                    this_probe_real_ls = probe_real_ls
+                    this_probe_imag_ls = probe_imag_ls
+                temp_real, temp_imag = multislice_propagate_batch(
+                            subobj_ls,
+                            this_probe_real_ls, this_probe_imag_ls,
+                            energy_ev, psize_cm * ds_level, kernel=h, free_prop_cm=free_prop_cm,
+                            obj_batch_shape=[len(pos_batch), *probe_size, this_obj_size[-1]],
+                            fresnel_approx=fresnel_approx, pure_projection=pure_projection, device=device_obj,
+                            type=unknown_type, normalize_fft=self.normalize_fft, sign_convention=self.sign_convention,
+                            scale_ri_by_k=self.scale_ri_by_k, is_minus_logged=self.is_minus_logged,
+                            pure_projection_return_sqrt=flag_pp_sqrt)
+                ex_int = temp_real ** 2 + temp_imag ** 2
+                for i_pattern in range(len(ex_int) // n_probe_modes):
+                    temp = w.sum(ex_int[i_pattern * n_probe_modes:(i_pattern + 1) * n_probe_modes], axis=0)
+                    ex_mag_ls.append(w.sqrt(temp))
         del subobj_ls, probe_real_ls, probe_imag_ls
 
         # Output shape is [minibatch_size, y, x].
@@ -680,26 +684,27 @@ class SparseMultisliceModel(ForwardModel):
                                 scale_ri_by_k=self.scale_ri_by_k)
                 ex_mag_ls.append(w.norm(ex_real, ex_imag))
             else:
-                for i_mode in range(n_probe_modes):
-                    if len(probe_real_ls.shape) == 3:
-                        this_probe_real_ls = probe_real_ls[i_mode, :, :]
-                        this_probe_imag_ls = probe_imag_ls[i_mode, :, :]
-                    else:
-                        this_probe_real_ls = probe_real_ls[:, i_mode, :, :]
-                        this_probe_imag_ls = probe_imag_ls[:, i_mode, :, :]
-                    temp_real, temp_imag = sparse_multislice_propagate_batch(
-                                u, v, subobj_ls,
-                                this_probe_real_ls, this_probe_imag_ls,
-                                energy_ev, psize_cm * ds_level, slice_pos_cm_ls, free_prop_cm=free_prop_cm,
-                                obj_batch_shape=[len(pos_batch), *probe_size, this_obj_size[-1]],
-                                fresnel_approx=fresnel_approx, device=device_obj,
-                                type=unknown_type, normalize_fft=self.normalize_fft, sign_convention=self.sign_convention,
-                                scale_ri_by_k=self.scale_ri_by_k)
-                    if i_mode == 0:
-                        ex_int = temp_real ** 2 + temp_imag ** 2
-                    else:
-                        ex_int = ex_int + temp_real ** 2 + temp_imag ** 2
-                ex_mag_ls.append(w.sqrt(ex_int))
+                if len(probe_real_ls.shape) == 3:
+                    this_probe_real_ls = w.reshape(probe_real_ls, [1, *list(probe_real_ls.shape)])
+                    this_probe_imag_ls = w.reshape(probe_imag_ls, [1, *list(probe_imag_ls.shape)])
+                    this_probe_real_ls = w.repeat(this_probe_real_ls, minibatch_size, 0)
+                    this_probe_imag_ls = w.repeat(this_probe_imag_ls, minibatch_size, 0)
+                else:
+                    this_probe_real_ls = probe_real_ls
+                    this_probe_imag_ls = probe_imag_ls
+                temp_real, temp_imag = sparse_multislice_propagate_batch(
+                    u, v, subobj_ls,
+                    this_probe_real_ls, this_probe_imag_ls,
+                    energy_ev, psize_cm * ds_level, slice_pos_cm_ls, free_prop_cm=free_prop_cm,
+                    obj_batch_shape=[len(pos_batch), *probe_size, this_obj_size[-1]],
+                    fresnel_approx=fresnel_approx, device=device_obj,
+                    type=unknown_type, normalize_fft=self.normalize_fft, sign_convention=self.sign_convention,
+                    scale_ri_by_k=self.scale_ri_by_k)
+                ex_int = temp_real ** 2 + temp_imag ** 2
+                for i_pattern in range(len(ex_int) // n_probe_modes):
+                    temp = w.sum(ex_int[i_pattern * n_probe_modes:(i_pattern + 1) * n_probe_modes], axis=0)
+                    ex_mag_ls.append(w.sqrt(temp))
+
         del subobj_ls, probe_real_ls, probe_imag_ls
 
         # Output shape is [minibatch_size, y, x].

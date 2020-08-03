@@ -120,8 +120,29 @@ def multislice_propagate_batch(grid_batch, probe_real, probe_imag, energy_ev, ps
                                normalize_fft=False, sign_convention=1, optimize_free_prop=False, u_free=None, v_free=None,
                                scale_ri_by_k=True, is_minus_logged=False, pure_projection_return_sqrt=False,
                                kappa=None, repeating_slice=None, return_fft_time=False):
+    """
+    :param probe_real: 2D, 3D or 4D array. Real part of the probe. If 4D, the shape should be [n_batches, n_modes, len_y,
+                       len_x]. If 3D, the shape should be [n_batches, len_y, len_x] (single mode). 4D data will be
+                       straightened in the first 2 dimensions, and the output will be a 3D array arranged like
+                       batch0_mode0, batch0_mode1, batch0_mode2, batch1_mode0, batch1_mode1, batch1_mode2, ...
+    :return: 3D array in [n_batches, len_y, len_x].
+    """
 
     minibatch_size = grid_batch.shape[0]
+    if len(probe_real.shape) == 3:
+        n_modes = 1
+    elif len(probe_real.shape) == 4:
+        # 4D probe with multiple modes are straightened to [n_batches * n_modes, len_y, len_x].
+        n_modes = probe_real.shape[1]
+        pshape = list(probe_real.shape)
+        pshape = [pshape[0] * pshape[1], *pshape[2:]]
+        probe_real = w.reshape(probe_real, pshape)
+        probe_imag = w.reshape(probe_imag, pshape)
+    else:
+        n_modes = 1
+    if n_modes > 1:
+        grid_batch = w.repeat(grid_batch, n_modes, axis=0)
+
     grid_shape = grid_batch.shape[1:-1]
     if delta_cm is not None:
         voxel_nm = np.array([psize_cm, psize_cm, delta_cm]) * 1.e7
@@ -264,10 +285,30 @@ def modulate_and_get_ctf(grid_batch, energy_ev, free_prop_cm, u_free=None, v_fre
 def sparse_multislice_propagate_batch(u, v, grid_batch, probe_real, probe_imag, energy_ev, psize_cm,
                                       slice_pos_cm_ls, free_prop_cm=None, obj_batch_shape=None, fresnel_approx=True,
                                       device=None, type='delta_beta', normalize_fft=False, sign_convention=1, scale_ri_by_k=True):
-
+    """
+    :param probe_real: 2D, 3D or 4D array. Real part of the probe. If 4D, the shape should be [n_batches, n_modes, len_y,
+                       len_x]. If 3D, the shape should be [n_batches, len_y, len_x] (single mode). 4D data will be
+                       straightened in the first 2 dimensions, and the output will be a 3D array arranged like
+                       batch0_mode0, batch0_mode1, batch0_mode2, batch1_mode0, batch1_mode1, batch1_mode2, ...
+    :return: 3D array in [n_batches, len_y, len_x].
+    """
     minibatch_size = grid_batch.shape[0]
     grid_shape = grid_batch.shape[1:-1]
     voxel_nm = np.array([psize_cm] * 3) * 1.e7
+
+    if len(probe_real.shape) == 3:
+        n_modes = 1
+    elif len(probe_real.shape) == 4:
+        # 4D probe with multiple modes are straightened to [n_batches * n_modes, probe_y, probe_x].
+        n_modes = probe_real.shape[1]
+        pshape = list(probe_real.shape)
+        pshape = [pshape[0] * pshape[1], *pshape[2:]]
+        probe_real = w.reshape(probe_real, pshape)
+        probe_imag = w.reshape(probe_imag, pshape)
+    else:
+        n_modes = 1
+    if n_modes > 1:
+        grid_batch = w.repeat(grid_batch, n_modes, axis=0)
 
     lmbda_nm = 1240. / energy_ev
     mean_voxel_nm = np.prod(voxel_nm) ** (1. / 3)
