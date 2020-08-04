@@ -670,7 +670,7 @@ def repeat(var, cp, axis=0, override_backend=None):
     if bn == 'autograd':
         return anp.repeat(var, cp, axis=axis)
     elif bn == 'pytorch':
-        return var.repeat_interleave(*cp, dim=axis)
+        return var.repeat_interleave(cp, dim=axis)
 
 
 def pad(var, pad_len, mode='constant', constant_values=0, override_backend=None):

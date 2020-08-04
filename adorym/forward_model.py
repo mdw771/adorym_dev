@@ -345,6 +345,7 @@ class PtychographyModel(ForwardModel):
                 ex_int = temp_real ** 2 + temp_imag ** 2
                 for i_pattern in range(len(ex_int) // n_probe_modes):
                     temp = w.sum(ex_int[i_pattern * n_probe_modes:(i_pattern + 1) * n_probe_modes], axis=0)
+                    temp = w.reshape(temp, [1, *list(temp.shape)])
                     ex_mag_ls.append(w.sqrt(temp))
         del subobj_ls, probe_real_ls, probe_imag_ls
 
@@ -703,6 +704,7 @@ class SparseMultisliceModel(ForwardModel):
                 ex_int = temp_real ** 2 + temp_imag ** 2
                 for i_pattern in range(len(ex_int) // n_probe_modes):
                     temp = w.sum(ex_int[i_pattern * n_probe_modes:(i_pattern + 1) * n_probe_modes], axis=0)
+                    temp = w.reshape(temp, [1, *list(temp.shape)])
                     ex_mag_ls.append(w.sqrt(temp))
 
         del subobj_ls, probe_real_ls, probe_imag_ls
