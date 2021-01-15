@@ -1836,6 +1836,14 @@ class TomographySubproblem(Subproblem):
             # plt.show()
         grad = self.forward(grad, theta, reverse=True)
         grad = -self.rho * grad
+
+        # Discard beta if gradient is abnormally large.
+        grid_delta, grid_beta = w.split_channel(grad)
+        if w.max(w.abs(grid_beta)) > 1e1 or w.isnan(w.max(w.abs(grid_beta))):
+            warnings.warn('TMO beta anomalies detected at epoch {} (rank {}).'.format(self.i_epoch, rank))
+            grid_beta[...] = 0
+        grad = w.stack([grid_delta, grid_beta], axis=-1)
+
         if self.debug:
             g1, g2 = w.split_channel(grad)
             print_flush('  Mean batch gradient (d/b): {}/{}.'.format(w.mean(g1), w.mean(g2)), 0, rank, **self.stdout_options)
