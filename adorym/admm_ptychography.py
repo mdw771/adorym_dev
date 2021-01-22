@@ -1839,7 +1839,7 @@ class TomographySubproblem(Subproblem):
 
         # Discard beta if gradient is abnormally large.
         grid_delta, grid_beta = w.split_channel(grad)
-        if w.max(w.abs(grid_beta)) > 1e1 or w.isnan(w.max(w.abs(grid_beta))):
+        if w.max(w.abs(grid_beta)) > 1e1 or w.isnan(w.max(w.abs(grid_beta), return_number=False)):
             warnings.warn('TMO beta anomalies detected at epoch {} (rank {}).'.format(self.i_epoch, rank))
             grid_beta[...] = 0
         grad = w.stack([grid_delta, grid_beta], axis=-1)
