@@ -243,7 +243,10 @@ def initialize_probe(probe_size, probe_type, pupil_function=None, probe_initial=
     if rescale_intensity:
         n_probe_modes = kwargs['n_probe_modes']
         f = h5py.File(os.path.join(save_path, fname), 'r')
-        dat = f['exchange/data'][0, min([1000, f['exchange/data'].shape[1]]), :, :]
+        if f['exchange/data'].shape[0] == 1:
+            dat = f['exchange/data'][...]
+        else:
+            dat = f['exchange/data'][0:1, :, :, :]
         if kwargs['raw_data_type'] == 'magnitude':
             dat = dat ** 2
         if not kwargs['normalize_fft']:
