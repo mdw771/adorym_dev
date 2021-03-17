@@ -590,12 +590,24 @@ def reconstruct_ptychography(
                                                       raw_data_type=raw_data_type, stdout_options=stdout_options,
                                                       sign_convention=sign_convention, **probe_init_kwargs)
             if n_probe_modes == 1:
-                probe_real = np.stack([np.squeeze(probe_real_init)])
-                probe_imag = np.stack([np.squeeze(probe_imag_init)])
+                if len(probe_real_init.shape) == 3:
+                    if len(probe_real_init) > n_probe_modes:
+                        probe_real = probe_real_init[:n_probe_modes]
+                        probe_imag = probe_imag_init[:n_probe_modes]
+                        print_flush('Supplied probe mode number is larger than specified. Only the first {} '
+                                    'are used.'.format(n_probe_modes), 0, rank)
+                else:
+                    probe_real = np.stack([np.squeeze(probe_real_init)])
+                    probe_imag = np.stack([np.squeeze(probe_imag_init)])
             else:
-                if len(probe_real_init.shape) == 3 and len(probe_real_init) == n_probe_modes:
+                if len(probe_real_init.shape) == 3:
                     probe_real = probe_real_init
                     probe_imag = probe_imag_init
+                    if len(probe_real_init) > n_probe_modes:
+                        probe_real = probe_real[:n_probe_modes]
+                        probe_imag = probe_imag[:n_probe_modes]
+                        print_flush('Supplied probe mode number is larger than specified. Only the first {} '
+                                    'are used.'.format(n_probe_modes), 0, rank)
                 elif len(probe_real_init.shape) == 2 or len(probe_real_init) == 1:
                     probe_real = []
                     probe_imag = []
